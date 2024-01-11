@@ -152,6 +152,13 @@ def _rolling_checksum(stream: BytesIO, blocksize: int = 65536) -> str:
     return hash.hexdigest()
 
 
+def _draw_chars(chars : List[bytes]):
+    if any(len(c) >= 2 for c in chars):
+        return b"<" + (b"".join(chars)).hex().encode() + b"> Tj\n"
+    else:
+        return b"(" + b"".join(chars) + b") Tj\n"
+
+
 class PdfWriter:
     """
     Write a PDF file out, given pages produced by another class.
@@ -929,6 +936,8 @@ class PdfWriter:
         txt = txt.replace("\\", "\\\\").replace("(", r"\(").replace(")", r"\)")
         # Generate appearance stream
         ap_stream = f"q\n/Tx BMC \nq\n1 1 {rct.width - 1} {rct.height - 1} re\nW\nBT\n{da}\n".encode()
+        is_comb = bool(field.get("/Ff", 0) & FA.FfBits.Comb)
+        max_len = field.get("/MaxLen")
         for line_number, line in enumerate(txt.replace("\n", "\r").split("\r")):
             if line in sel:
                 # may be improved but can not find how get fill working => replaced with lined box
@@ -941,13 +950,19 @@ class PdfWriter:
             else:
                 # Td is a relative translation
                 ap_stream += f"0 {- font_height * 1.4} Td\n".encode()
-            enc_line: List[bytes] = [
-                font_full_rev.get(c, c.encode("utf-16-be")) for c in line
-            ]
-            if any(len(c) >= 2 for c in enc_line):
-                ap_stream += b"<" + (b"".join(enc_line)).hex().encode() + b"> Tj\n"
+            # Draw characters
+            if is_comb and max_len >= 0:
+                for char in line:
+                    enc_char: List[bytes] = [
+                        font_full_rev.get(char, char.encode("utf-16-be"))
+                    ]
+                    ap_stream += _draw_chars(enc_char)
+                    ap_stream += f"{rct.width / max_len} 0 Td\n".encode()
             else:
-                ap_stream += b"(" + b"".join(enc_line) + b") Tj\n"
+                enc_line: List[bytes] = [
+                    font_full_rev.get(c, c.encode("utf-16-be")) for c in line
+                ]
+                ap_stream += _draw_chars(enc_line)
         ap_stream += b"ET\nQ\nEMC\nQ\n"
 
         # Create appearance dictionary

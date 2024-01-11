@@ -1523,6 +1523,24 @@ def test_update_form_fields(write_data_here, needs_cleanup):
         Path(write_data_here).unlink()
 
 
+def test_comb_field(pdf_file_path):
+    pdf_path = RESOURCE_ROOT / "i-765.pdf"
+    reader = PdfReader(pdf_path)
+    writer = PdfWriter(clone_from=reader)
+
+    writer.update_page_form_field_values(
+        writer.pages[1],
+        {
+            "Line12b_SSN[0]": "123456789",
+        },
+        auto_regenerate=False,
+    )
+
+    # Inspect manually by adding 'assert False' and viewing the PDF
+    with open(pdf_file_path, "wb") as fp:
+        writer.write(fp)
+
+
 @pytest.mark.enable_socket()
 def test_iss1862():
     # The file here has "/B" entry to define the font in a object below the page
